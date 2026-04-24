@@ -51,6 +51,19 @@ die() {
   exit 1
 }
 
+friendly_url() {
+  host="$1"
+  port="$2"
+
+  case "$host" in
+    ""|0.0.0.0|::|'[::]')
+      host="127.0.0.1"
+      ;;
+  esac
+
+  printf 'http://%s:%s\n' "$host" "$port"
+}
+
 [ -n "$USER_HOME" ] || die "无法确定当前用户主目录。"
 
 find_uv() {
@@ -235,7 +248,8 @@ launch_webui() {
     set -- --host "$HOST" --port "$PORT"
   fi
 
-  log "启动 Web UI: $ENV_PYTHON $PROJECT_ROOT/launch_webui.py $*"
+  FRIENDLY_URL="$(friendly_url "$HOST" "$PORT")"
+  log "启动 Web UI。若浏览器未自动打开，请访问 $FRIENDLY_URL"
   exec "$ENV_PYTHON" "$PROJECT_ROOT/launch_webui.py" "$@"
 }
 

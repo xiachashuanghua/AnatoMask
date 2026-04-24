@@ -32,6 +32,21 @@ function Fail {
     throw "[AnatoMask] ERROR: $Message"
 }
 
+function Get-FriendlyUrl {
+    param(
+        [string]$Host,
+        [int]$Port
+    )
+
+    $DisplayHost = if (-not $Host -or $Host -eq "0.0.0.0" -or $Host -eq "::" -or $Host -eq "[::]") {
+        "127.0.0.1"
+    } else {
+        $Host
+    }
+
+    return "http://${DisplayHost}:$Port"
+}
+
 function Get-UvCommandPath {
     $candidates = @(
         (Get-Command uv -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue),
@@ -268,7 +283,8 @@ function Launch-WebUi {
         $argsToUse = @("--host", $ResolvedHost, "--port", "$ResolvedPort")
     }
 
-    Write-Log "Launching Web UI: $EnvPython $ProjectRoot\launch_webui.py $($argsToUse -join ' ')"
+    $FriendlyUrl = Get-FriendlyUrl -Host $ResolvedHost -Port $ResolvedPort
+    Write-Log "Starting Web UI. Open $FriendlyUrl if the browser does not appear automatically."
     & $EnvPython (Join-Path $ProjectRoot "launch_webui.py") @argsToUse
 }
 

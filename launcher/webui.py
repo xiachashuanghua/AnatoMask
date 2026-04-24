@@ -193,6 +193,28 @@ def _header_html() -> str:
     """
 
 
+def _display_host(host: str) -> str:
+    normalized = (host or "").strip()
+    if normalized in {"", "0.0.0.0", "::", "[::]"}:
+        return "127.0.0.1"
+    return normalized
+
+
+def _display_url(host: str, port: int) -> str:
+    display_host = _display_host(host)
+    if ":" in display_host and not display_host.startswith("["):
+        display_host = f"[{display_host}]"
+    return f"http://{display_host}:{port}"
+
+
+def _announce_launch(host: str, port: int, open_browser: bool) -> None:
+    local_url = _display_url(host, port)
+    print("[AnatoMask] Web UI is starting.", flush=True)
+    print(f"[AnatoMask] Open in browser: {local_url}", flush=True)
+    if open_browser:
+        print("[AnatoMask] The default browser will open automatically.", flush=True)
+
+
 def _persist_train_form(*values):
     _save_ui_state("train", _payload_from_fields(TRAIN_FORM_FIELDS, values))
 
@@ -568,11 +590,14 @@ def build_app() -> gr.Blocks:
     return demo
 
 
-def launch(host: str = "127.0.0.1", port: int = 7860) -> None:
+def launch(host: str = "127.0.0.1", port: int = 7860, open_browser: bool = True) -> None:
     app = build_app()
+    _announce_launch(host, port, open_browser)
     launch_kwargs = {
         "server_name": host,
         "server_port": port,
+        "inbrowser": open_browser,
+        "quiet": True,
     }
     if FAVICON_PATH.exists():
         launch_kwargs["favicon_path"] = str(FAVICON_PATH)
