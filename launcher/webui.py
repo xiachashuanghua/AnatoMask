@@ -367,6 +367,13 @@ def _job_choices():
     return gr.update(choices=jobs, value=jobs[0] if jobs else None)
 
 
+def _job_snapshot(job_id):
+    jobs = list_jobs()
+    selected_job = job_id if job_id in jobs else (jobs[0] if jobs else None)
+    state, config, log_tail, artifacts = get_job_details(selected_job)
+    return gr.update(choices=jobs, value=selected_job), state, config, log_tail, artifacts
+
+
 def _job_details(job_id):
     state, config, log_tail, artifacts = get_job_details(job_id)
     return state, config, log_tail, artifacts
@@ -573,6 +580,7 @@ def build_app() -> gr.Blocks:
                 component.change(fn=_persist_infer_form, inputs=infer_inputs, outputs=[])
 
         with gr.Tab("Jobs"):
+            jobs_refresh_timer = gr.Timer(value=2.0)
             refresh_jobs = gr.Button("Refresh job list")
             job_selector = gr.Dropdown(choices=list_jobs(), label="Select job", allow_custom_value=True)
             inspect = gr.Button("Inspect")
@@ -583,8 +591,34 @@ def build_app() -> gr.Blocks:
             job_artifacts = gr.Textbox(label="Artifacts", lines=10)
             cancel_result = gr.Textbox(label="Cancel result")
 
-            refresh_jobs.click(fn=_job_choices, outputs=[job_selector])
-            inspect.click(fn=_job_details, inputs=[job_selector], outputs=[job_state, job_config, job_log, job_artifacts])
+            refresh_jobs.click(
+                fn=_job_snapshot,
+                inputs=[job_selector],
+                outputs=[job_selector, job_state, job_config, job_log, job_artifacts],
+                show_progress="hidden",
+                queue=False,
+            )
+            inspect.click(
+                fn=_job_snapshot,
+                inputs=[job_selector],
+                outputs=[job_selector, job_state, job_config, job_log, job_artifacts],
+                show_progress="hidden",
+                queue=False,
+            )
+            job_selector.change(
+                fn=_job_snapshot,
+                inputs=[job_selector],
+                outputs=[job_selector, job_state, job_config, job_log, job_artifacts],
+                show_progress="hidden",
+                queue=False,
+            )
+            jobs_refresh_timer.tick(
+                fn=_job_snapshot,
+                inputs=[job_selector],
+                outputs=[job_selector, job_state, job_config, job_log, job_artifacts],
+                show_progress="hidden",
+                queue=False,
+            )
             cancel.click(fn=_cancel, inputs=[job_selector], outputs=[job_state, cancel_result])
 
     return demo

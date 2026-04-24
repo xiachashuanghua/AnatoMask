@@ -102,10 +102,13 @@ def _launch_process(command: list[str], job_id: str, job_dir: Path, config: dict
     command_path.write_text(_stringify_command(command), encoding="utf-8")
 
     with log_path.open("ab") as log_handle:
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
         kwargs: dict[str, Any] = {
             "cwd": str(PROJECT_ROOT),
             "stdout": log_handle,
             "stderr": subprocess.STDOUT,
+            "env": env,
         }
         if os.name == "nt":
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -185,6 +188,7 @@ def build_train_job(config: dict) -> tuple[list[str], dict]:
 
     command = [
         sys.executable,
+        "-u",
         "main.py",
         "--gpu_id",
         str(resolved["gpu_id"]),
@@ -297,6 +301,7 @@ def build_infer_job(config: dict) -> tuple[list[str], dict]:
 
     command = [
         sys.executable,
+        "-u",
         "eval.py",
         "--gpu_id",
         str(resolved["gpu_id"]),
