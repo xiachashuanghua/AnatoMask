@@ -34,14 +34,14 @@ function Fail {
 
 function Get-FriendlyUrl {
     param(
-        [string]$Host,
+        [string]$BindHost,
         [int]$Port
     )
 
-    $DisplayHost = if (-not $Host -or $Host -eq "0.0.0.0" -or $Host -eq "::" -or $Host -eq "[::]") {
+    $DisplayHost = if (-not $BindHost -or $BindHost -eq "0.0.0.0" -or $BindHost -eq "::" -or $BindHost -eq "[::]") {
         "127.0.0.1"
     } else {
-        $Host
+        $BindHost
     }
 
     return "http://${DisplayHost}:$Port"
@@ -283,7 +283,7 @@ function Launch-WebUi {
         $argsToUse = @("--host", $ResolvedHost, "--port", "$ResolvedPort")
     }
 
-    $FriendlyUrl = Get-FriendlyUrl -Host $ResolvedHost -Port $ResolvedPort
+    $FriendlyUrl = Get-FriendlyUrl -BindHost $ResolvedHost -Port $ResolvedPort
     Write-Log "Starting Web UI. Open $FriendlyUrl if the browser does not appear automatically."
     & $EnvPython (Join-Path $ProjectRoot "launch_webui.py") @argsToUse
 }
