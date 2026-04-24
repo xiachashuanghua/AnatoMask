@@ -20,8 +20,158 @@ from runtime_utils import PROJECT_ROOT, dumps_pretty
 
 DEFAULT_PRETRAIN = PROJECT_ROOT / "model_step60000.pt"
 LOGO_PATH = PROJECT_ROOT / "logo.png"
+GITHUB_PATH = PROJECT_ROOT / "github.png"
 FAVICON_PATH = PROJECT_ROOT / "logo_no_cha.png"
 UI_STATE_PATH = PROJECT_ROOT / "webui_runs" / "ui_state.json"
+GITHUB_URL = "https://github.com/xiachashuanghua/AnatoMask"
+UI_CSS = """
+/* ── base ── */
+.gradio-container {
+    font-size: 18px !important;
+    line-height: 1.6;
+    color: #1f2937;
+    background: #f3f4f6 !important;
+}
+
+/* ── strip Gradio block chrome from HTML components ── */
+.gradio-container .block:has(> .html-container),
+.gradio-container .html-container {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* ── tabs: share the same white card background, no top gap ── */
+.gradio-container .tabs {
+    background: #ffffff !important;
+    border-radius: 12px 12px 0 0 !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
+.gradio-container .tab-nav,
+.gradio-container [role="tablist"] {
+    background: #ffffff !important;
+    gap: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    border-bottom: 2px solid #e5e7eb !important;
+    padding: 0 20px !important;
+    border-radius: 12px 12px 0 0 !important;
+}
+
+.gradio-container .tab-nav button,
+.gradio-container [role="tab"] {
+    font-size: 1.1rem !important;
+    font-weight: 600 !important;
+    padding: 0.85rem 1.6rem !important;
+    min-height: 3.2rem;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    border-radius: 0 !important;
+    color: #6b7280 !important;
+    border-bottom: 2px solid transparent !important;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.gradio-container .tab-nav button.selected,
+.gradio-container [role="tab"][aria-selected="true"] {
+    color: #111827 !important;
+    border-bottom-color: #111827 !important;
+    font-weight: 700 !important;
+}
+
+/* ── tab content area ── */
+.gradio-container .tabitem {
+    background: #ffffff !important;
+    border-radius: 0 0 12px 12px !important;
+    padding: 20px !important;
+}
+
+/* ── form elements ── */
+.gradio-container label,
+.gradio-container label span,
+.gradio-container input,
+.gradio-container textarea,
+.gradio-container select,
+.gradio-container button,
+.gradio-container .prose,
+.gradio-container .prose p,
+.gradio-container .prose li,
+.gradio-container .block-label,
+.gradio-container details summary {
+    font-size: 1em !important;
+}
+
+.gradio-container label,
+.gradio-container label span,
+.gradio-container .block-label,
+.gradio-container details summary {
+    color: #374151 !important;
+    font-size: 1.0rem !important;
+    font-weight: 600;
+}
+
+.gradio-container input,
+.gradio-container textarea,
+.gradio-container select {
+    color: #0f172a !important;
+    font-size: 1.0rem !important;
+    font-weight: 500;
+    padding: 0.5rem 0.7rem !important;
+    background: #f9fafb !important;
+    border-radius: 8px !important;
+}
+
+.gradio-container input::placeholder,
+.gradio-container textarea::placeholder {
+    color: #9ca3af !important;
+    opacity: 1;
+}
+
+.gradio-container .prose,
+.gradio-container .prose p,
+.gradio-container .prose li {
+    color: #4b5563 !important;
+    font-size: 0.95rem !important;
+}
+
+.gradio-container textarea {
+    line-height: 1.65;
+}
+
+.gradio-container button.primary {
+    font-size: 1.05rem !important;
+    padding: 0.6rem 1.5rem !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em;
+}
+
+/* ── github link ── */
+.github-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    color: #374151;
+    font-size: 0.88rem;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid #d1d5db;
+    background: rgba(255,255,255,0.7);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.github-link:hover {
+    background: #ffffff;
+    border-color: #9ca3af;
+    color: #111827;
+}
+"""
 TRAIN_FORM_FIELDS = [
     "gpu_id",
     "data_dir",
@@ -175,22 +325,60 @@ def _payload_from_fields(field_names: list[str], values: tuple) -> dict:
 
 
 def _header_html() -> str:
-    logo_html = ""
+    logo_b64 = ""
+    logo_mime = "image/png"
     if LOGO_PATH.exists():
-        mime_type = mimetypes.guess_type(LOGO_PATH.name)[0] or "image/png"
-        encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
-        logo_html = (
-            f'<img src="data:{mime_type};base64,{encoded}" '
-            'alt="AnatoMask logo" '
-            'style="display:block; width:min(240px, 40vw); height:auto; object-fit:contain;" />'
-        )
+        logo_mime = mimetypes.guess_type(LOGO_PATH.name)[0] or "image/png"
+        logo_b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+
+    github_b64 = ""
+    github_mime = "image/png"
+    if GITHUB_PATH.exists():
+        github_mime = mimetypes.guess_type(GITHUB_PATH.name)[0] or "image/png"
+        github_b64 = base64.b64encode(GITHUB_PATH.read_bytes()).decode("ascii")
+
+    logo_img = (
+        f'<img src="data:{logo_mime};base64,{logo_b64}" alt="AnatoMask logo" '
+        'style="width:72px; height:72px; object-fit:contain; border-radius:14px;" />'
+        if logo_b64 else ""
+    )
+
+    github_icon = (
+        f'<img src="data:{github_mime};base64,{github_b64}" alt="GitHub" '
+        'style="width:16px; height:16px; opacity:0.7; vertical-align:middle;" />'
+        if github_b64 else ""
+    )
+
+    github_link = (
+        f'<a href="{GITHUB_URL}" target="_blank" rel="noopener" class="github-link">'
+        f'{github_icon}View on GitHub</a>'
+    )
 
     return f"""
-    <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:12px 0 4px 0;">
-      {logo_html}
-      <h1 style="text-align:center; margin:0;">AnatoMask</h1>
+    <div style="
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px 14px 24px;
+        background: #ffffff;
+        border-radius: 12px 12px 0 0;
+    ">
+      <div style="display:flex; align-items:center; gap:14px;">
+        {logo_img}
+        <div>
+          <div style="font-size:1.6rem; font-weight:800; color:#111827; line-height:1.15; letter-spacing:-0.02em;">AnatoMask</div>
+          <div style="font-size:0.85rem; color:#9ca3af; margin-top:3px; font-weight:400; letter-spacing:0.01em;">Medical image segmentation</div>
+        </div>
+      </div>
+      <div style="flex-shrink:0;">
+        {github_link}
+      </div>
     </div>
     """
+
+
+def _style_html() -> str:
+    return f"<style>{UI_CSS}</style>"
 
 
 def _display_host(host: str) -> str:
@@ -397,6 +585,7 @@ def build_app() -> gr.Blocks:
     )
 
     with gr.Blocks(title="AnatoMask") as demo:
+        gr.HTML(_style_html())
         gr.HTML(_header_html())
 
         with gr.Tab("Train"):
@@ -632,6 +821,7 @@ def launch(host: str = "127.0.0.1", port: int = 7860, open_browser: bool = True)
         "server_port": port,
         "inbrowser": open_browser,
         "quiet": True,
+        "css": UI_CSS,
     }
     if FAVICON_PATH.exists():
         launch_kwargs["favicon_path"] = str(FAVICON_PATH)
