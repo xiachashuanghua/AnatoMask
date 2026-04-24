@@ -1,19 +1,24 @@
 import argparse
+import json
 import os
 from functools import partial
-import numpy as np
+from pathlib import Path
+
 import torch
 from torch import amp
+from monai import transforms
+from monai.data import DataLoader, Dataset, decollate_batch
 from monai.inferers import sliding_window_inference
-from monai.metrics import DiceMetric
-from monai.transforms import *
-from monai.utils.enums import MetricReduction
-from utils.utils import *
-from utils.utils import AverageMeter
-from monai import data, transforms
-from monai.data import *
+from monai.transforms import AsDiscreted, Compose, EnsureTyped, Invertd, SaveImaged
+
 from models.comer_unetr import ViTCoMerUNETR
-from runtime_utils import configure_runtime_warnings, ensure_cuda_available, get_device, resolve_datalist_path, safe_set_resource_limit
+from runtime_utils import (
+    configure_runtime_warnings,
+    ensure_cuda_available,
+    get_device,
+    resolve_datalist_path,
+    safe_set_resource_limit,
+)
 
 configure_runtime_warnings()
 safe_set_resource_limit()
@@ -57,6 +62,64 @@ parser.add_argument("--spatial_dims", default=3, type=int, help="spatial dimensi
 parser.add_argument("--use_checkpoint", default=True, help="use gradient checkpointing to save memory")
 parser.add_argument("--sr_ratio", default=1, type=int, help="multi scale token")
 
+
+def _resolve_entry_path(base_dir: str, value: str) -> str:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path(base_dir).expanduser() / path
+    return str(path.resolve())
+
+
+def _normalize_infer_entry(entry, base_dir: str, split_name: str, index: int) -> dict:
+    if isinstance(entry, str):
+        normalized = {"image": _resolve_entry_path(base_dir, entry)}
+    elif isinstance(entry, dict):
+        image_value = str(entry.get("image", "")).strip()
+        if not image_value:
+            raise ValueError(f"{split_name}[{index}] is missing the required 'image' field.")
+        normalized = {key: value for key, value in entry.items() if key != "label"}
+        normalized["image"] = _resolve_entry_path(base_dir, image_value)
+    else:
+        raise TypeError(f"{split_name}[{index}] must be either a string or an object.")
+
+    image_path = Path(normalized["image"])
+    if not image_path.is_file():
+        raise FileNotFoundError(f"image file does not exist: {image_path}")
+
+    return normalized
+
+
+def _load_infer_datalist(args) -> list[dict]:
+    datalist_json = resolve_datalist_path(args.data_dir, args.json_list, args.datalist_json)
+    datalist_path = Path(datalist_json)
+    payload = json.loads(datalist_path.read_text(encoding="utf-8"))
+
+    if args.data_dir:
+        base_dir = str(Path(args.data_dir).expanduser().resolve())
+    else:
+        base_dir = str(datalist_path.parent.resolve())
+
+    selected_split = None
+    entries = None
+    for split_name in ("validation", "test"):
+        split_entries = payload.get(split_name)
+        if isinstance(split_entries, list) and split_entries:
+            selected_split = split_name
+            entries = split_entries
+            break
+
+    if entries is None:
+        raise ValueError("The dataset JSON must contain a non-empty 'validation' or 'test' section for inference.")
+
+    dataset_list = [
+        _normalize_infer_entry(entry, base_dir=base_dir, split_name=selected_split, index=index)
+        for index, entry in enumerate(entries)
+    ]
+    print(f"Using '{selected_split}' split from {datalist_path}")
+    print(f"inference cases: {len(dataset_list)}")
+    return dataset_list
+
+
 def get_test_loader(args):
     """
     Creates training transforms, constructs a dataset, and returns a dataloader.
@@ -66,45 +129,21 @@ def get_test_loader(args):
     """
     test_transforms = transforms.Compose(
         [
-            transforms.LoadImaged(keys=["image", "label"]),
-            transforms.EnsureChannelFirstd(keys=["image", "label"]),
-            transforms.Orientationd(keys=["image", "label"], axcodes="RAS", labels=None),
+            transforms.LoadImaged(keys=["image"]),
+            transforms.EnsureChannelFirstd(keys=["image"]),
+            transforms.Orientationd(keys=["image"], axcodes="RAS", labels=None),
             transforms.Spacingd(
-                keys=["image", "label"], pixdim=(args.space_x, args.space_y, args.space_z), mode=("bilinear", "nearest")
+                keys=["image"],
+                pixdim=(args.space_x, args.space_y, args.space_z),
+                mode=("bilinear",),
             ),
             transforms.ScaleIntensityRanged(
                 keys=["image"], a_min=args.a_min, a_max=args.a_max, b_min=args.b_min, b_max=args.b_max, clip=True
             ),
-            transforms.CropForegroundd(keys=["image", "label"], source_key="image"),
-
-            # transforms.ToTensord(keys=["image", "label"]),
+            transforms.CropForegroundd(keys=["image"], source_key="image"),
         ]
     )
-    # test_transforms = Compose(
-    #     [
-    #         LoadImaged(keys=["image", "label"]),
-    #         EnsureChannelFirstd(keys=["image", "label"]),
-    #         Orientationd(keys=["image", "label"], axcodes="RAS"),
-    #         NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-    #         CropForegroundd(
-    #             keys=["image", "label"], source_key="image", k_divisible=[args.roi_x, args.roi_y, args.roi_z]
-    #         ),
-
-    #         SpatialPadd(keys=["image", "label"], spatial_size=(args.roi_x, args.roi_y, args.roi_z),
-    #                     mode="constant"),
-
-    #         RandShiftIntensityd(keys="image", offsets=0.1, prob=0),
-    #     ]
-    # )
-
-    # constructing training dataset
-
-
-    datalist_json = resolve_datalist_path(args.data_dir, args.json_list, args.datalist_json)
-    dataset_list = load_decathlon_datalist(datalist_json, True, "validation", base_dir=args.data_dir)
-
-
-    print('test len {}'.format(len(dataset_list)))
+    dataset_list = _load_infer_datalist(args)
 
     test_ds = Dataset(data=dataset_list, transform=test_transforms)
     test_loader = DataLoader(
@@ -121,29 +160,12 @@ def main():
     os.makedirs(args.save_prediction_path, exist_ok=True)
 
     test_loader, test_transforms = get_test_loader(args)
-    # model=MiT(num_classes=args.out_channels)
-    # model = SwinUNETR(
-    #     # img_size=(args.roi_x, args.roi_y, args.roi_z),
-    #     in_channels=args.in_channels,
-    #     out_channels=args.out_channels,
-    #     feature_size=48,
-    #     drop_rate=0.0,
-    #     attn_drop_rate=0.0,
-    #     dropout_path_rate=0.0,
-    #     use_checkpoint=args.use_checkpoint,
-    #     use_v2=True
-    # )
-    model=ViTCoMerUNETR( img_size=(96, 96, 96),
-    in_channels=args.in_channels,
-    out_channels=args.out_channels,
-    feature_size=args.feature_size,
+    model = ViTCoMerUNETR(
+        img_size=(96, 96, 96),
+        in_channels=args.in_channels,
+        out_channels=args.out_channels,
+        feature_size=args.feature_size,
     )
-    # model= ConvViT3dUNETR(img_size=(args.roi_x, args.roi_y, args.roi_z),
-    #                            in_channels=args.in_channels,
-    #                            out_channels=args.out_channels,
-    #                            feature_size=args.feature_size,
-    #                            args=args,
-    #                            )
     inf_size = [args.roi_x, args.roi_y, args.roi_z]
     model_inferer = partial(
         sliding_window_inference,
@@ -162,25 +184,30 @@ def main():
     # enable cuDNN benchmark
     torch.backends.cudnn.benchmark = True
 
-    post_transforms = Compose([EnsureTyped(keys=["pred"]),
-                               Invertd(keys=["pred"],
-                                       transform=test_transforms,
-                                       orig_keys="image",
-                                       meta_keys="pred_meta_dict",
-                                       orig_meta_keys="image_meta_dict",
-                                       meta_key_postfix="meta_dict",
-                                       nearest_interp=True,
-                                       to_tensor=True),
-                               AsDiscreted(keys="pred", argmax=False, to_onehot=None),
-                               SaveImaged(keys="pred", meta_keys="pred_meta_dict", output_dir=args.save_prediction_path,
-                                          separate_folder=False, folder_layout=None,
-                                          resample=True),
-                               ])
-
-    acc_func = DiceMetric(include_background=False, reduction=MetricReduction.MEAN, get_not_nans=True)
-    run_acc = AverageMeter()
-    post_label = AsDiscrete(to_onehot=args.out_channels)
-    post_pred = AsDiscrete(argmax=True, to_onehot=args.out_channels)
+    post_transforms = Compose(
+        [
+            EnsureTyped(keys=["pred"]),
+            Invertd(
+                keys=["pred"],
+                transform=test_transforms,
+                orig_keys="image",
+                meta_keys="pred_meta_dict",
+                orig_meta_keys="image_meta_dict",
+                meta_key_postfix="meta_dict",
+                nearest_interp=True,
+                to_tensor=True,
+            ),
+            AsDiscreted(keys="pred", argmax=False, to_onehot=None),
+            SaveImaged(
+                keys="pred",
+                meta_keys="pred_meta_dict",
+                output_dir=args.save_prediction_path,
+                separate_folder=False,
+                folder_layout=None,
+                resample=True,
+            ),
+        ]
+    )
 
     with torch.no_grad():
         for idx, batch_data in enumerate(test_loader):
@@ -189,30 +216,14 @@ def main():
             data = batch_data["image"]
             data = data.to(device, non_blocking=True)
 
-            label = batch_data["label"]
-            label = label.to(device, non_blocking=True)
-
-            # name = batch_data['name'][0]
-
             with amp.autocast("cuda", enabled=args.amp):
                 logits = model_inferer(data)
 
-            val_labels_list = decollate_batch(label)
-            val_labels_convert = [post_label(val_label_tensor) for val_label_tensor in val_labels_list]
-            val_outputs_list = decollate_batch(logits)
-            val_output_convert = [post_pred(val_pred_tensor) for val_pred_tensor in val_outputs_list]
-            acc_func.reset()
-            acc_func(y_pred=val_output_convert, y=val_labels_convert)
-            acc, not_nans = acc_func.aggregate()
-            run_acc.update(acc.cpu().numpy(), n=not_nans.cpu().numpy())
-            print(np.mean(run_acc.avg))
             output = logits.argmax(1)
-            batch_data['pred'] = output.unsqueeze(1)
-            batch_data = [post_transforms(i) for i in
-                          decollate_batch(batch_data)]
-
-            # os.rename(os.path.join(args.save_prediction_path, name[:-7]+'_trans.nii.gz'),
-            #           os.path.join(args.save_prediction_path, name[:-12]+'.nii.gz'))
+            batch_data["pred"] = output.unsqueeze(1)
+            batch_data = [post_transforms(i) for i in decollate_batch(batch_data)]
+            print(f"case {idx}: prediction saved.")
+    print("Inference finished.")
 
 
 if __name__ == "__main__":

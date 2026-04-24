@@ -1,14 +1,12 @@
-import logging
 import math
+from functools import partial
 from typing import Sequence
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from ops.modules.ms_deform_attn import MSDeformAttn
-from timm.layers import trunc_normal_
-from torch.nn.init import normal_
-from functools import partial
 from monai.networks.blocks.patchembedding import PatchEmbeddingBlock
 from monai.networks.blocks.transformerblock import TransformerBlock
 from ops.modules.comer_modules import (CNN, CTIBlock, deform_inputs)
@@ -313,122 +311,3 @@ class ViTCoMer(nn.Module):
         f4 = self.norm4(c4_6 + x4_6)    # [B, C,  6,  6,  6]
 
         return [f1, f2, f3, f4]
-class ViTCoMerForClassification(nn.Module):
-    """
-    基于 ViTCoMer 的 3D 分类模型封装。
-    使用 ViTCoMer 作为特征提取 backbone，取最后一层特征 f4 做全局平均池化 + 线性分类头。
-
-    参数：
-        in_channels: 输入通道数 (例如 CT 体积是 1)
-        img_size:    (D, H, W)，要和你 dataloader 里的处理一致
-        patch_size:  ViT 的 patch 大小 (pd, ph, pw)
-        num_classes: 分类类别数
-        其他参数：   直接透传给 ViTCoMer
-    """
-    def __init__(
-        self,
-        in_channels: int,
-        img_size,
-        patch_size,
-        out_channels: int,
-        hidden_size: int = 768,
-        mlp_dim: int = 3072,
-        num_layers: int = 12,
-        num_heads: int = 12,
-        proj_type: str = "conv",
-        pos_embed_type: str = "learnable",
-        dropout_rate: float = 0.0,
-        spatial_dims: int = 3,
-        qkv_bias: bool = False,
-        save_attn: bool = False,
-        window_size: int = 0,
-        window_block_indexes: tuple[int, ...] = (),
-        conv_inplane: int = 64,
-        deform_num_heads: int = 12,
-        n_points: int = 4,
-        init_values: float = 0.0,
-        deform_ratio: float = 0.5,
-        cffn_ratio: float = 0.25,
-        with_cffn: bool = True,
-        interaction_indexes=[[0, 2], [3, 5], [6, 8], [9, 11]],
-        use_extra_extractor: bool = True,
-        add_vit_feature: bool = True,
-        use_extra_CTI: bool = True,
-        with_cp: bool = False,
-        use_CTI_toV: bool = True,
-        use_CTI_toC: bool = True,
-        cnn_feature_interaction: bool = True,
-        dim_ratio: float = 1.0,
-        drop_path_rate: float = 0.1,
-        cls_dropout: float = 0.0,
-    ) -> None:
-        super().__init__()
-
-        # 1) backbone：就是你现有的 ViTCoMer
-        self.vit = ViTCoMer(
-            in_channels=in_channels,
-            img_size=img_size,
-            patch_size=patch_size,
-            hidden_size=hidden_size,
-            mlp_dim=mlp_dim,
-            num_layers=num_layers,
-            num_heads=num_heads,
-            proj_type=proj_type,
-            pos_embed_type=pos_embed_type,
-            dropout_rate=dropout_rate,
-            spatial_dims=spatial_dims,
-            qkv_bias=qkv_bias,
-            save_attn=save_attn,
-            window_size=window_size,
-            window_block_indexes=window_block_indexes,
-            conv_inplane=conv_inplane,
-            deform_num_heads=deform_num_heads,
-            n_points=n_points,
-            init_values=init_values,
-            deform_ratio=deform_ratio,
-            cffn_ratio=cffn_ratio,
-            with_cffn=with_cffn,
-            interaction_indexes=interaction_indexes,
-            use_extra_extractor=use_extra_extractor,
-            add_vit_feature=add_vit_feature,
-            use_extra_CTI=use_extra_CTI,
-            with_cp=with_cp,
-            use_CTI_toV=use_CTI_toV,
-            use_CTI_toC=use_CTI_toC,
-            cnn_feature_interaction=cnn_feature_interaction,
-            dim_ratio=dim_ratio,
-            drop_path_rate=drop_path_rate,
-        )
-
-        self.out_channels = out_channels
-        self.hidden_size = hidden_size
-
-        # 2) 全局池化 + 分类头
-        self.global_pool = nn.AdaptiveAvgPool3d(1)   # [B, C, D, H, W] -> [B, C, 1, 1, 1]
-        self.cls_dropout = nn.Dropout(cls_dropout) if cls_dropout > 0.0 else nn.Identity()
-        self.cls_head = nn.Linear(hidden_size, out_channels)
-
-        # 初始化分类头
-        nn.init.trunc_normal_(self.cls_head.weight, std=0.02)
-        if self.cls_head.bias is not None:
-            nn.init.constant_(self.cls_head.bias, 0.0)
-
-    def forward(self, x):
-        """
-        x: [B, C, D, H, W]
-        返回:
-            logits: [B, num_classes]
-            feats:  分类用的全局特征 [B, hidden_size]（方便做对比学习 / 可视化）
-        """
-        # ViTCoMer 原本返回 [f1, f2, f3, f4]
-        features = self.vit(x)
-        f1, f2, f3, f4 = features  # f4 最语义、分辨率最小
-
-        # 选用 f4 做分类特征（也可以换成 f1/f2/f3，看你任务）
-        # f4: [B, C, D4, H4, W4]
-        x_cls = self.global_pool(f4)      # -> [B, C, 1, 1, 1]
-        x_cls = torch.flatten(x_cls, 1)   # -> [B, C]
-        x_cls = self.cls_dropout(x_cls)
-        logits = self.cls_head(x_cls)     # -> [B, num_classes]
-
-        return logits

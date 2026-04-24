@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
+import inspect
 import json
-from pathlib import Path
+import mimetypes
 
 import gradio as gr
 
@@ -17,6 +19,8 @@ from runtime_utils import PROJECT_ROOT, dumps_pretty
 
 
 DEFAULT_PRETRAIN = PROJECT_ROOT / "model_step60000.pt"
+LOGO_PATH = PROJECT_ROOT / "logo.png"
+FAVICON_PATH = PROJECT_ROOT / "logo_no_cha.png"
 UI_STATE_PATH = PROJECT_ROOT / "webui_runs" / "ui_state.json"
 TRAIN_FORM_FIELDS = [
     "gpu_id",
@@ -168,6 +172,25 @@ def _save_ui_state(section: str, payload: dict) -> None:
 
 def _payload_from_fields(field_names: list[str], values: tuple) -> dict:
     return {name: value for name, value in zip(field_names, values)}
+
+
+def _header_html() -> str:
+    logo_html = ""
+    if LOGO_PATH.exists():
+        mime_type = mimetypes.guess_type(LOGO_PATH.name)[0] or "image/png"
+        encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+        logo_html = (
+            f'<img src="data:{mime_type};base64,{encoded}" '
+            'alt="AnatoMask logo" '
+            'style="display:block; width:min(240px, 40vw); height:auto; object-fit:contain;" />'
+        )
+
+    return f"""
+    <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:12px 0 4px 0;">
+      {logo_html}
+      <h1 style="text-align:center; margin:0;">AnatoMask</h1>
+    </div>
+    """
 
 
 def _persist_train_form(*values):
@@ -345,11 +368,7 @@ def build_app() -> gr.Blocks:
     )
 
     with gr.Blocks(title="AnatoMask") as demo:
-        gr.Markdown(
-            """
-            <h1 style="text-align: center; margin: 0;">AnatoMask</h1>
-            """
-        )
+        gr.HTML(_header_html())
 
         with gr.Tab("Train"):
             with gr.Row():
@@ -551,4 +570,19 @@ def build_app() -> gr.Blocks:
 
 def launch(host: str = "127.0.0.1", port: int = 7860) -> None:
     app = build_app()
-    app.launch(server_name=host, server_port=port)
+    launch_kwargs = {
+        "server_name": host,
+        "server_port": port,
+    }
+    if FAVICON_PATH.exists():
+        launch_kwargs["favicon_path"] = str(FAVICON_PATH)
+    try:
+        signature = inspect.signature(app.launch)
+        launch_kwargs = {
+            name: value
+            for name, value in launch_kwargs.items()
+            if name in signature.parameters
+        }
+    except (TypeError, ValueError):
+        pass
+    app.launch(**launch_kwargs)

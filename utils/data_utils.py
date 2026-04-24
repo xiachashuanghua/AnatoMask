@@ -14,9 +14,8 @@ import os
 import pickle
 import numpy as np
 import torch
-import itertools as it
 from monai import data, transforms
-from monai.data import *
+from monai.data import PersistentDataset, load_decathlon_datalist
 
 
 class Sampler(torch.utils.data.Sampler):

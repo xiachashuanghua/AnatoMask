@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import os
 import socket
 import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 
 DEFAULT_TITLE = "AnatoMask"
 DEFAULT_BIND_HOST = "127.0.0.1"
 DEFAULT_PORT = 7860
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+FAVICON_PATH = PROJECT_ROOT / "logo_no_cha.png"
+CLIENT_ICON_PATH = PROJECT_ROOT / "webui_runs" / "client_icon.ico"
 
 
 def _connect_host(bind_host: str) -> str:
@@ -61,6 +66,33 @@ def _wait_for_server(url: str, timeout_seconds: float = 30.0) -> None:
     raise RuntimeError(f"Desktop client could not reach {url}: {last_error}")
 
 
+def _resolve_window_icon() -> str | None:
+    if not FAVICON_PATH.exists():
+        return None
+
+    if os.name != "nt":
+        return str(FAVICON_PATH)
+
+    try:
+        from PIL import Image
+
+        CLIENT_ICON_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if (
+            not CLIENT_ICON_PATH.exists()
+            or CLIENT_ICON_PATH.stat().st_mtime < FAVICON_PATH.stat().st_mtime
+        ):
+            with Image.open(FAVICON_PATH) as image:
+                image.save(
+                    CLIENT_ICON_PATH,
+                    format="ICO",
+                    sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
+                )
+        return str(CLIENT_ICON_PATH)
+    except Exception as exc:
+        print(f"[AnatoMask] Failed to prepare the desktop icon from {FAVICON_PATH}: {exc}")
+        return None
+
+
 def _server_thread(bind_host: str, port: int, result: dict, ready: threading.Event) -> None:
     try:
         from launcher.webui import build_app
@@ -73,6 +105,8 @@ def _server_thread(bind_host: str, port: int, result: dict, ready: threading.Eve
             "inbrowser": False,
             "show_api": False,
         }
+        if FAVICON_PATH.exists():
+            launch_kwargs["favicon_path"] = str(FAVICON_PATH)
         try:
             signature = inspect.signature(demo.launch)
             launch_kwargs = {
@@ -142,7 +176,20 @@ def main(argv: list[str] | None = None) -> None:
         confirm_close=True,
     )
     try:
-        webview.start(debug=args.debug)
+        webview_start_kwargs = {"debug": args.debug}
+        window_icon = _resolve_window_icon()
+        if window_icon:
+            webview_start_kwargs["icon"] = window_icon
+        try:
+            start_signature = inspect.signature(webview.start)
+            webview_start_kwargs = {
+                name: value
+                for name, value in webview_start_kwargs.items()
+                if name in start_signature.parameters
+            }
+        except (TypeError, ValueError):
+            pass
+        webview.start(**webview_start_kwargs)
     finally:
         demo = result.get("demo")
         if demo is not None:

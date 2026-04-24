@@ -15,8 +15,6 @@ import time
 
 import numpy as np
 import torch
-import torch.nn.parallel
-import torch.utils.data.distributed
 from tensorboardX import SummaryWriter
 from torch import amp
 from utils.utils import AverageMeter, distributed_all_gather

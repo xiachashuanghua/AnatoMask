@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
-import subprocess
-import sys
 import warnings
 from pathlib import Path
 
@@ -38,6 +35,7 @@ def configure_runtime_warnings() -> None:
         r"Detected pickle protocol 5 in the checkpoint.*",
         r"Corrupt cache file detected: .*",
         r"Using a non-tuple sequence for multidimensional indexing is deprecated.*",
+        r"Padding: moving img .* from cuda to cpu for dtype=.* mode=constant\.",
     ]
     for message in noisy_messages:
         warnings.filterwarnings("ignore", message=message, category=Warning)
@@ -72,83 +70,6 @@ def resolve_datalist_path(data_dir: str | None, json_list: str | None, datalist_
     if not data_dir or not json_list:
         raise ValueError("Either datalist_json or both data_dir and json_list must be provided.")
     return str((Path(data_dir).expanduser() / json_list).resolve())
-
-
-def detect_nvidia_driver_major() -> int | None:
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
-
-    first_line = result.stdout.strip().splitlines()[0].strip()
-    if not first_line:
-        return None
-    try:
-        return int(first_line.split(".", 1)[0])
-    except ValueError:
-        return None
-
-
-def recommend_torch_channel(driver_major: int | None) -> str | None:
-    if driver_major is None:
-        return None
-    if driver_major >= 580:
-        return "cu130"
-    if driver_major >= 525:
-        return "cu126"
-    return None
-
-
-def build_torch_install_command(channel: str | None) -> str:
-    if not channel:
-        return "Unsupported NVIDIA driver for the supported PyTorch CUDA channels."
-    return (
-        f"python -m pip install torch torchvision torchaudio "
-        f"--index-url https://download.pytorch.org/whl/{channel}"
-    )
-
-
-def collect_runtime_info() -> dict:
-    info = {
-        "platform": platform.platform(),
-        "system": platform.system(),
-        "python": sys.version.split()[0],
-        "project_root": str(PROJECT_ROOT),
-        "cuda_required": True,
-        "cpu_supported": False,
-    }
-
-    driver_major = detect_nvidia_driver_major()
-    info["nvidia_driver_major"] = driver_major
-    info["recommended_torch_channel"] = recommend_torch_channel(driver_major)
-    info["recommended_torch_install"] = build_torch_install_command(info["recommended_torch_channel"])
-
-    if torch is None:
-        info["torch_installed"] = False
-        return info
-
-    info["torch_installed"] = True
-    info["torch_version"] = torch.__version__
-    info["torch_cuda_version"] = torch.version.cuda
-    info["cuda_available"] = torch.cuda.is_available()
-    info["gpu_count"] = torch.cuda.device_count() if torch.cuda.is_available() else 0
-    info["gpus"] = []
-    if torch.cuda.is_available():
-        for index in range(torch.cuda.device_count()):
-            props = torch.cuda.get_device_properties(index)
-            info["gpus"].append(
-                {
-                    "index": index,
-                    "name": props.name,
-                    "total_memory_gb": round(props.total_memory / 1024**3, 2),
-                }
-            )
-    return info
 
 
 def dumps_pretty(data: dict) -> str:

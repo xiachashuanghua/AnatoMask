@@ -1,9 +1,7 @@
 monai
 nibabel
 SimpleITK
-matplotlib
 tensorboardX
-einops
 Pillow
 scipy
 timm

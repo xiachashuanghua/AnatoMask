@@ -16,7 +16,7 @@ from collections.abc import Sequence
 import torch.nn as nn
 
 from monai.networks.blocks.dynunet_block import UnetOutBlock
-from monai.networks.blocks.unetr_block import UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
+from monai.networks.blocks.unetr_block import UnetrBasicBlock, UnetrUpBlock
 from models.vit_comer import ViTCoMer
 from monai.utils import ensure_tuple_rep
 
@@ -91,7 +91,6 @@ class ViTCoMerUNETR(nn.Module):
         self.patch_size = ensure_tuple_rep(16, spatial_dims)
         self.feat_size = tuple(img_d // p_d for img_d, p_d in zip(img_size, self.patch_size))
         self.hidden_size = hidden_size
-        self.classification = False
         self.feature_size = feature_size
         self.vit = ViTCoMer(
             in_channels=in_channels,
@@ -113,8 +112,6 @@ class ViTCoMerUNETR(nn.Module):
             conv_inplane=64,
             drop_path_rate=0.2,
             with_cp=True,
-            # window_size=6,
-            # window_block_indexes=(0,1,3,4,6,7,9,10),
             interaction_indexes=[[0, 2], [3, 5], [6, 8], [9, 11]],
         )
         self.encoder1 = UnetrBasicBlock(spatial_dims=3, in_channels=in_channels, out_channels=self.feature_size,
@@ -135,16 +132,7 @@ class ViTCoMerUNETR(nn.Module):
                                      kernel_size=3, upsample_kernel_size=2, norm_name='instance', res_block=True)
         self.decoder1 = UnetrUpBlock(spatial_dims=3, in_channels=self.feature_size, out_channels=self.feature_size,
                                      kernel_size=3, upsample_kernel_size=2, norm_name='instance', res_block=True)
-        # self.out = UnetOutBlock(spatial_dims=3, in_channels=self.feature_size, out_channels=num_classes)
         self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels)
-        self.proj_axes = (0, spatial_dims + 1) + tuple(d + 1 for d in range(spatial_dims))
-        self.proj_view_shape = list(self.feat_size) + [self.hidden_size]
-
-    def proj_feat(self, x):
-        new_view = [x.size(0)] + self.proj_view_shape
-        x = x.view(new_view)
-        x = x.permute(self.proj_axes).contiguous()
-        return x
 
     def forward(self, x_in):
         f1, f2, f3, f4 = self.vit(x_in)

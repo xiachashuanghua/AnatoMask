@@ -1,13 +1,11 @@
-import logging
 from functools import partial
-import torch.nn.functional as F
 import torch
 import torch.nn as nn
-from ops.modules import MSDeformAttn
+import torch.nn.functional as F
 from timm.layers import DropPath
 import torch.utils.checkpoint as cp
 
-_logger = logging.getLogger(__name__)
+from ops.modules.ms_deform_attn import MSDeformAttn
 
 
 

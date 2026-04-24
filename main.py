@@ -17,12 +17,9 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import torch.nn.parallel
-import torch.utils.data.distributed
 from optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from trainer import run_training
 from utils.data_utils import get_loader
-from utils.utils import *
 from monai.inferers import sliding_window_inference
 from monai.losses import DiceCELoss
 from monai.metrics import DiceMetric
@@ -164,20 +161,11 @@ def main_worker(gpu, args):
     logger = init_log('global', logging.INFO)
     logger.propagate = 0
 
-    # model = SwinUNETR(
-    #     in_channels=args.in_channels,
-    #     out_channels=args.out_channels,
-    #     feature_size=args.feature_size,
-    #     drop_rate=0.0,
-    #     attn_drop_rate=0.0,
-    #     dropout_path_rate=args.dropout_path_rate,
-    #     use_checkpoint=args.use_checkpoint,
-    #     use_v2=True
-    # )
-    model=ViTCoMerUNETR( img_size=(96, 96, 96),
-    in_channels=args.in_channels,
-    out_channels=args.out_channels,
-    feature_size=args.feature_size,
+    model = ViTCoMerUNETR(
+        img_size=(96, 96, 96),
+        in_channels=args.in_channels,
+        out_channels=args.out_channels,
+        feature_size=args.feature_size,
     )
     if args.pretrained_root:
         print("Loading Weights from the Path: {}".format(args.pretrained_root))
@@ -193,30 +181,6 @@ def main_worker(gpu, args):
             print(f"  + {k}")
     else:
         print("No pretrained_root provided. Training from scratch.")
-    # model = ConvViT3dUNETR(img_size=(args.roi_x, args.roi_y, args.roi_z),
-    #                            in_channels=args.in_channels,
-    #                            out_channels=args.out_channels,
-    #                            feature_size=args.feature_size,
-    #                            args=args,
-    #                            )
-    # checkpoint = torch.load(args.pretrained_root, map_location='cpu')
-    # ckpt = {}
-    # for key, value in checkpoint['model'].items():
-    #     new_key = f'backbone.{key}'
-    #     ckpt[new_key] = value
-    # checkpoint_weight = ckpt['backbone.patch_embed1.proj.weight']
-    # # Repeat the channels along dimension 1
-    # # Repeat 4 times to match the desired shape
-    # repeated_weight = checkpoint_weight.repeat(1, args.in_channels, 1, 1, 1)
-    # # Update the tensor in the checkpoint
-    # ckpt['backbone.patch_embed1.proj.weight'] = repeated_weight
-    # ckpt = interpolate_pos_embed(args,
-    #                                 getattr(model, 'backbone'),
-    #                                 ckpt,
-    #                                 new_size=(args.roi_x, args.roi_y, args.roi_z),
-    #                                 prefix='backbone.')
-    # out = model.load_state_dict(ckpt, strict=False)
-    # print(out)
 
     if args.squared_dice:
         dice_loss = DiceCELoss(
@@ -269,7 +233,6 @@ def main_worker(gpu, args):
 
     elif args.optim_name == "adamw":
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.optim_lr, weight_decay=args.reg_weight)
-        # optimizer = torch.optim.AdamW(model.parameters(), lr=args.optim_lr, amsgrad=True)
 
     elif args.optim_name == "sgd":
         optimizer = torch.optim.SGD(
