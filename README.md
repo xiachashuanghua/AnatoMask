@@ -4,6 +4,30 @@
   <img src="logo.png" alt="AnatoMask logo" width="260">
 </p>
 
+## Demo
+
+<p align="center">
+  <a href="demo.mp4">Watch the demo video (demo.mp4)</a>
+</p>
+
+GitHub will open `demo.mp4` in its built-in preview page.
+
+## Minimum System Requirements
+
+The values below are the practical minimum requirements for this release.
+
+| Usage | CPU | GPU | Disk |
+| --- | --- | --- | --- |
+| Web UI and inference | 64-bit x86 CPU, 4 cores practical minimum | NVIDIA CUDA-capable GPU, driver major version `>= 525`, at least `12 GB` VRAM | At least `10 GB` free for the app environment and inference outputs, plus dataset space |
+| Training | 64-bit x86 CPU, 8 cores practical minimum | NVIDIA CUDA-capable GPU, driver major version `>= 525`, at least `24 GB` VRAM | At least `30 GB` free for the app environment, checkpoints, cache, logs, and outputs, plus dataset space |
+
+Notes:
+
+- CPU-only execution is not supported in this build.
+- Windows currently supports single-GPU training only.
+- If `Use PersistentDataset` is enabled, extra cache space under `webui_runs/cache/` is required.
+- A single training run may keep both `model.pt` and `model_final.pt`, and one checkpoint can be several GB in size.
+
 `AnatoMask` is a local 3D medical image segmentation tool that supports:
 
 - starting model training from a graphical interface
