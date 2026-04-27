@@ -4,14 +4,6 @@
   <img src="logo.png" alt="AnatoMask logo" width="260">
 </p>
 
-## Demo
-
-<p align="center">
-  <a href="demo.mp4">Watch the demo video (demo.mp4)</a>
-</p>
-
-GitHub will open `demo.mp4` in its built-in preview page.
-
 ## Minimum System Requirements
 
 The values below are the practical minimum requirements for this release.
@@ -27,6 +19,16 @@ Notes:
 - Windows currently supports single-GPU training only.
 - If `Use PersistentDataset` is enabled, extra cache space under `webui_runs/cache/` is required.
 - A single training run may keep both `model.pt` and `model_final.pt`, and one checkpoint can be several GB in size.
+
+## Demo
+
+<p align="center">
+  <video src="https://raw.githubusercontent.com/xiachashuanghua/AnatoMask/main/demo.mp4" autoplay muted loop playsinline controls>
+    Your browser does not support the video tag.
+  </video>
+</p>
+
+If the embedded preview does not render on your GitHub page, open [demo.mp4](demo.mp4) directly.
 
 `AnatoMask` is a local 3D medical image segmentation tool that supports:
 
