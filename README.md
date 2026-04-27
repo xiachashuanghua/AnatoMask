@@ -23,12 +23,12 @@ Notes:
 ## Demo
 
 <p align="center">
-  <video src="https://raw.githubusercontent.com/xiachashuanghua/AnatoMask/main/demo.mp4" autoplay muted loop playsinline controls>
-    Your browser does not support the video tag.
-  </video>
+  <a href="demo.mp4">
+    <img src="demo.gif" alt="AnatoMask demo preview" />
+  </a>
 </p>
 
-If the embedded preview does not render on your GitHub page, open [demo.mp4](demo.mp4) directly.
+Click the animated preview to open the full `demo.mp4`.
 
 `AnatoMask` is a local 3D medical image segmentation tool that supports:
 
