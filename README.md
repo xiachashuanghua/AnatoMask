@@ -1,7 +1,7 @@
 # AnatoMask
 
 <p align="center">
-  <img src="logo.png" alt="AnatoMask logo" width="260">
+  <img src="logo(2).png" alt="AnatoMask logo" width="260">
 </p>
 
 ## Minimum System Requirements
