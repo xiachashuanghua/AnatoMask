@@ -61,7 +61,7 @@ if [ "$MODE" = "channel" ]; then
 elif [ "$MODE" = "driver-major" ]; then
   printf '%s\n' "$DRIVER_MAJOR"
 elif [ "$MODE" = "summary" ]; then
-  printf '%s\n' "[AnatoMask] 检测到 NVIDIA 驱动版本: $DRIVER_VERSION"
+  printf '%s\n' "[AnatoMask] 检测到了 NVIDIA 驱动版本: $DRIVER_VERSION"
   printf '%s\n' "[AnatoMask] 推荐 PyTorch CUDA 通道: $TORCH_CHANNEL"
   printf '%s\n' "[AnatoMask] 推荐安装命令: python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/$TORCH_CHANNEL"
 fi

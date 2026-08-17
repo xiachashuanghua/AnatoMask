@@ -1,1 +1,1 @@
-"""Desktop client entrypoints for AnatoMask."""
+"""Desktop client entrypoints for StructMIM."""

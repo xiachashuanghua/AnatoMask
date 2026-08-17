@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------
-# 3D Deformable Self-attention
+# 3D Deformable Self-attention.
 # ------------------------------------------------------------------------
 # Modified from Deformable DETR
 # Copyright (c) 2020 SenseTime. All Rights Reserved.

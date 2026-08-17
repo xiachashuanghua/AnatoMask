@@ -1,1 +1,1 @@
-# Launcher package for the first web UI release.
+# Launcher package for the first web UI release..
