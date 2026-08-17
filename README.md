@@ -1,7 +1,8 @@
-# AnatoMask
+# StructMIM
 
 <p align="center">
-  <img src="logo (2).png" alt="AnatoMask logo" width="260">
+  <img src="logo (2).png" alt="StructMIM
+ logo" width="260">
 </p>
 
 ## Minimum System Requirements
@@ -24,13 +25,13 @@ Notes:
 
 <p align="center">
   <a href="demo.mp4">
-    <img src="demo.gif" alt="AnatoMask demo preview" />
+    <img src="demo.gif" alt="StructMIM demo preview" />
   </a>
 </p>
 
 Click the animated preview to open the full `demo.mp4`.
 
-`AnatoMask` is a local 3D medical image segmentation tool that supports:
+`StructMIM` is a local 3D medical image segmentation tool that supports:
 
 - starting model training from a graphical interface
 - starting model inference from a graphical interface
